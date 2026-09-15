@@ -18,7 +18,7 @@ jobs:
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
-          SONAR_TOKEN_CATORCE: ${{ secrets.SONAR_TOKEN_CATORCE }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_CATORCE }}
 
   build-and-push:
     name: Build & Push Docker Image
