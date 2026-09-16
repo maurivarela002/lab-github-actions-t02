@@ -1,0 +1,120 @@
+name: Pipeline DevOps
+env:
+  IMAGE_TAG: ${{ github.sha }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sonarqube:
+    name: SonarQube
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+
+  scan:
+    name: Scan de seguridad (Trivy)
+    runs-on: ubuntu-latest
+    needs: sonarqube
+    outputs:
+      image-tag: ${{ steps.tag.outputs.value }} # ← expone el output del job
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Build imagen para escaneo
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: lab-github-actions:${{ env.IMAGE_TAG }}
+
+      - name: Escaneo Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: lab-github-actions:${{ env.IMAGE_TAG }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Generate image tag
+        id: tag           # ← necesario para referenciarlo después
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "value=$SHORT_SHA" >> $GITHUB_OUTPUT
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: [scan]
+    steps:
+      - name: Simular tests
+        run: echo "Escaneando imagen con tag ${{ needs.scan.outputs.image-tag }}"
+
+      - name: Generar reporte
+        run: |
+          mkdir -p reports
+          echo "Build: OK" > reports/build-report.txt
+          echo "SHA: ${{ github.sha }}" >> reports/build-report.txt
+          echo "Fecha: $(date -u)" >> reports/build-report.txt
+
+      - name: Subir reporte
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report
+          path: reports/
+          retention-days: 30       # opcional, default 90
+
+
+
+  build-and-push:
+      name: Build & Push Docker Image
+      runs-on: ubuntu-latest
+      needs: [scan, test]
+      steps:
+        - name: Checkout código
+          uses: actions/checkout@v4
+
+        - name: Login a Docker Hub
+          uses: docker/login-action@v3
+          with:
+            username: ${{ env.DOCKERHUB_USERNAME }}
+            password: ${{ env.DOCKERHUB_TOKEN }}
+
+        - name: Build y push imagen
+          uses: docker/build-push-action@v5
+          with:
+            context: .
+            push: ${{ github.event_name != 'pull_request' }}
+            tags: ${{ env.DOCKERHUB_USERNAME }}/lab-github-actions:latest
+
+        - name: Imprimir contexto
+          run: |
+            echo "IMAGE_TAG: ${{ env.IMAGE_TAG }}"
+            echo "DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}"
+            echo "DOCKERHUB_TOKEN: ${{ env.DOCKERHUB_TOKEN }}"
+            echo "SONAR_TOKEN: ${{ env.SONAR_TOKEN }}"
+      
+        - name: Descargar reporte
+          uses: actions/download-artifact@v4
+          with:
+            name: build-report
+            path: reports/
+
+        - name: Usar el reporte
+          run: cat reports/build-report.txt    
