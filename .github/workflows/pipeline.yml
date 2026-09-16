@@ -109,9 +109,6 @@ jobs:
             echo "DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}"
             echo "DOCKERHUB_TOKEN: ${{ env.DOCKERHUB_TOKEN }}"
             echo "SONAR_TOKEN: ${{ env.SONAR_TOKEN }}"
-
-
-            steps:
       
         - name: Descargar reporte
           uses: actions/download-artifact@v4
