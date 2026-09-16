@@ -53,6 +53,11 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
+      - name: Generate image tag
+        id: tag           # ← necesario para referenciarlo después
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "value=$SHORT_SHA" >> $GITHUB_OUTPUT
   test:
     name: Test
     runs-on: ubuntu-latest
