@@ -29,6 +29,8 @@ jobs:
     name: Scan de seguridad (Trivy)
     runs-on: ubuntu-latest
     needs: build-and-push
+    outputs:
+      image-tag: ${{ steps.tag.outputs.value }} # ← expone el output del job
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
@@ -52,7 +54,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
   test:
-    name: Test
+    name: Test - ${{ needs.build.outputs.image-tag }}
     runs-on: ubuntu-latest
     needs: build-and-push
     steps:
@@ -85,4 +87,3 @@ jobs:
             echo "DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}"
             echo "DOCKERHUB_TOKEN: ${{ env.DOCKERHUB_TOKEN }}"
             echo "SONAR_TOKEN: ${{ env.SONAR_TOKEN }}"
-
